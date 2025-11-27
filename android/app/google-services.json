@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "823177098138",
+    "project_id": "ledgu-c8222",
+    "storage_bucket": "ledgu-c8222.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:823177098138:android:a4908916586c139ef6c023",
+        "android_client_info": {
+          "package_name": "com.example.ledgu"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBpziYvEGL2B9lYcwG8eWpMcXzUPytELwo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
