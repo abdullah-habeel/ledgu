@@ -30,4 +30,6 @@ class ProfileController {
       );
     }
   }
+
+  Future getCurrentUserInfo() async {}
 }

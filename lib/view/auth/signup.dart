@@ -109,7 +109,6 @@ class Signup extends StatelessWidget {
 
                             if (user != null) {
                               // SUCCESS MESSAGE
-                              // ignore: use_build_context_synchronously
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text("Signup Successful!"),
@@ -123,7 +122,6 @@ class Signup extends StatelessWidget {
                               Future.delayed(
                                   const Duration(milliseconds: 800), () {
                                 Navigator.pushReplacement(
-                                  // ignore: use_build_context_synchronously
                                   context,
                                   MaterialPageRoute(
                                       builder: (_) => MainScreen()),
