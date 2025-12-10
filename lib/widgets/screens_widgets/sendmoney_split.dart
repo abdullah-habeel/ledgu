@@ -20,9 +20,9 @@ class SendMoneySplitSheet extends StatefulWidget {
 class _SendMoneySplitSheetState extends State<SendMoneySplitSheet> {
   final TextEditingController _amountController = TextEditingController();
 
-  Map<String, bool> _selectedMembers = {};
+  final Map<String, bool> _selectedMembers = {};
   Map<String, double> _memberAmounts = {};
-  Map<String, String> _memberNames = {}; // UID → fullName
+  final Map<String, String> _memberNames = {}; // UID → fullName
   double totalAmount = 0;
   bool loadingNames = true;
 

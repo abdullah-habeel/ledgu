@@ -1,6 +1,5 @@
-// ignore_for_file: use_build_context_synchronously
-
 import 'package:flutter/material.dart';
+import 'package:ledgu/controller/screens_controller/friend_controller.dart';
 import 'package:ledgu/controller/screens_controller/group_controller.dart';
 import 'package:ledgu/utilties/colors.dart';
 import 'package:ledgu/widgets/button.dart';
@@ -18,16 +17,20 @@ class UserGroupScreen extends StatefulWidget {
 class _UserGroupScreenState extends State<UserGroupScreen> with SingleTickerProviderStateMixin {
   late TabController tabController;
 
-  final GroupController controller = GroupController();
+  final FriendController controller = FriendController();
+  final GroupController groupController = GroupController();
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController groupNameController = TextEditingController();
   final TextEditingController groupInfoController = TextEditingController();
+  final TextEditingController newMemberEmailController = TextEditingController();
 
   Map<String, dynamic>? userData;
   List<Map<String, dynamic>> friends = [];
   List<String> selectedFriendUids = [];
+  List<Map<String, dynamic>> addedEmails = [];
   bool isLoading = false;
+  bool isAddingEmail = false;
 
   @override
   void initState() {
@@ -37,7 +40,7 @@ class _UserGroupScreenState extends State<UserGroupScreen> with SingleTickerProv
   }
 
   Future<void> loadFriends() async {
-    final loadedFriends = await controller.loadFriends();
+    final loadedFriends = await controller.getFriends();
     setState(() => friends = loadedFriends);
   }
 
@@ -50,7 +53,7 @@ class _UserGroupScreenState extends State<UserGroupScreen> with SingleTickerProv
       userData = null;
     });
 
-    final data = await controller.getUserByEmail(email);
+    final data = await groupController.getUserByEmail(email);
     if (data != null) {
       setState(() => userData = data);
     } else {
@@ -60,25 +63,44 @@ class _UserGroupScreenState extends State<UserGroupScreen> with SingleTickerProv
     setState(() => isLoading = false);
   }
 
-  Future<void> createGroup() async {
-    final name = groupNameController.text.trim();
-    final info = groupInfoController.text.trim();
+  Future<void> addFriend() async {
+    if (userData == null) return;
+    final friendUid = userData!['uid'] ?? userData!['id'];
+    await controller.addFriend(friendUid);
 
-    if (name.isEmpty || selectedFriendUids.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Enter group name and select at least one friend")));
-      return;
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Friend added successfully")),
+    );
 
-    await controller.createGroup(name, info, selectedFriendUids);
+    await loadFriends();
+  }
+
+  Future<void> addEmailMemberToGroup() async {
+    final email = newMemberEmailController.text.trim();
+    if (email.isEmpty) return;
 
     setState(() {
-      groupNameController.clear();
-      groupInfoController.clear();
-      selectedFriendUids.clear();
+      isAddingEmail = true;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Group created successfully")));
+    final data = await groupController.getUserByEmail(email);
+    if (data != null) {
+      final uid = data['uid'] ?? data['id'];
+      if (!selectedFriendUids.contains(uid)) {
+        selectedFriendUids.add(uid);
+        addedEmails.add(data);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("User added to group")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("User not found")),
+      );
+    }
+
+    newMemberEmailController.clear();
+    setState(() => isAddingEmail = false);
   }
 
   @override
@@ -86,6 +108,7 @@ class _UserGroupScreenState extends State<UserGroupScreen> with SingleTickerProv
     emailController.dispose();
     groupNameController.dispose();
     groupInfoController.dispose();
+    newMemberEmailController.dispose();
     tabController.dispose();
     super.dispose();
   }
@@ -97,7 +120,12 @@ class _UserGroupScreenState extends State<UserGroupScreen> with SingleTickerProv
       appBar: AppBar(
         backgroundColor: AppColors.black2,
         leading: const BackButton(),
-        title: const MyText(text: 'ADD Account', color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+        title: const MyText(
+          text: 'ADD Account',
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
         centerTitle: true,
       ),
       body: Column(
@@ -145,12 +173,18 @@ class _UserGroupScreenState extends State<UserGroupScreen> with SingleTickerProv
                   MyText(text: "City: ${userData!['city']}", color: Colors.white, fontSize: 14),
                   const GapBox(5),
                   MyText(text: "Contact: ${userData!['contact']}", color: Colors.white, fontSize: 14),
+                  const GapBox(10),
+                  MyButton(
+                    text: 'Add Friend',
+                    backgroundColor: AppColors.green,
+                    onPressed: addFriend,
+                  ),
                 ],
               ),
             ),
           const GapBox(20),
           MyButton(
-            text: isLoading ? "Loading..." : "Continue",
+            text: isLoading ? "Loading..." : "Search",
             backgroundColor: AppColors.blue2,
             fixedWidth: double.infinity,
             onPressed: isLoading ? null : fetchUserByEmail,
@@ -166,10 +200,23 @@ class _UserGroupScreenState extends State<UserGroupScreen> with SingleTickerProv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          MyTextFormField(controller: groupNameController, labelText: 'Group Title', hintText: 'Enter Group Name'),
+          // Group Name
+          MyTextFormField(
+            controller: groupNameController,
+            labelText: 'Group Title',
+            hintText: 'Enter Group Name',
+          ),
           const GapBox(10),
-          MyTextFormField(controller: groupInfoController, labelText: 'Info', hintText: 'Enter Group Info'),
+
+          // Group Info
+          MyTextFormField(
+            controller: groupInfoController,
+            labelText: 'Info',
+            hintText: 'Enter Group Info',
+          ),
           const GapBox(20),
+
+          // Select friends from existing friends
           const MyText(text: "Select Friends", color: Colors.white, fontSize: 14),
           const GapBox(10),
           ...friends.map((f) {
@@ -189,12 +236,59 @@ class _UserGroupScreenState extends State<UserGroupScreen> with SingleTickerProv
               activeColor: AppColors.blue2,
             );
           }),
+
           const GapBox(20),
+
+          // New member email field like other fields
+          MyTextFormField(
+            controller: newMemberEmailController,
+            labelText: 'Add Member by Email',
+            hintText: 'Enter user email',
+          ),
+          const GapBox(10),
+          MyButton(
+            text: isAddingEmail ? "Adding..." : "Add Email",
+            backgroundColor: AppColors.green,
+            onPressed: isAddingEmail ? null : addEmailMemberToGroup,
+          ),
+
+          // Show added emails below
+          ...addedEmails.map((e) => Padding(
+                padding: const EdgeInsets.only(top: 5),
+                child: MyText(text: "Added: ${e['fullName']}", color: Colors.white, fontSize: 14),
+              )),
+
+          const GapBox(20),
+
+          // Create group button
           MyButton(
             text: 'Create Group',
             fixedWidth: double.infinity,
             backgroundColor: AppColors.blue2,
-            onPressed: createGroup,
+            onPressed: () async {
+              if (groupNameController.text.isEmpty || selectedFriendUids.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Enter group name and at least one member")),
+                );
+                return;
+              }
+
+              await groupController.createGroup(
+                groupNameController.text,
+                groupInfoController.text,
+                selectedFriendUids,
+              );
+
+              groupNameController.clear();
+              groupInfoController.clear();
+              newMemberEmailController.clear();
+              selectedFriendUids.clear();
+              addedEmails.clear();
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Group created successfully")),
+              );
+            },
           ),
           const GapBox(30),
         ],

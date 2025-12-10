@@ -9,7 +9,8 @@ class TransactionController {
 
   /// Get username by UID
   Future<String> getUserName(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
+    if (uid.isEmpty) return "Unknown";
+    final doc = await _firestore.collection("users").doc(uid).get();
     if (!doc.exists || doc.data() == null) return uid;
     return (doc.data()?['fullName'] ?? uid).toString();
   }
@@ -30,7 +31,7 @@ class TransactionController {
       'groupId': groupId ?? "",
       'amount': amount,
       'time': time, // local timestamp
-      'serverTime': FieldValue.serverTimestamp(), // optional
+      'serverTime': FieldValue.serverTimestamp(),
     });
   }
 
@@ -43,19 +44,21 @@ class TransactionController {
         .collection('transactions')
         .orderBy('time', descending: true)
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map((doc) {
-            final data = doc.data()..['id'] = doc.id;
-            return data;
-          })
-          .where((tx) {
-            final from = tx['from'] ?? '';
-            final to = tx['to'] ?? '';
-            return (from == currentUser.uid && to == friendUid) ||
-                (from == friendUid && to == currentUser.uid);
-          })
-          .toList();
+        .asyncMap((snapshot) async {
+      List<Map<String, dynamic>> list = [];
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final from = data['from'] ?? '';
+        final to = data['to'] ?? '';
+        if ((from == currentUser.uid && to == friendUid) ||
+            (from == friendUid && to == currentUser.uid)) {
+          data['id'] = doc.id;
+          data['fromName'] = await getUserName(from);
+          data['toName'] = await getUserName(to);
+          list.add(data);
+        }
+      }
+      return list;
     });
   }
 
@@ -66,12 +69,58 @@ class TransactionController {
         .where('groupId', isEqualTo: groupId)
         .orderBy('time', descending: true)
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
+        .asyncMap((snapshot) async {
+      List<Map<String, dynamic>> list = [];
+      for (var doc in snapshot.docs) {
         final data = doc.data();
         data['id'] = doc.id;
-        return data;
-      }).toList();
+        final fromUid = data['from'] ?? '';
+        final toList = List<String>.from(data['toList'] ?? []);
+        data['fromName'] = await getUserName(fromUid);
+
+        if (toList.isNotEmpty) {
+          final names = await Future.wait(toList.map((uid) => getUserName(uid)));
+          data['toName'] = names.join(", ");
+        } else {
+          final toSingle = data['to'] ?? '';
+          data['toName'] = await getUserName(toSingle);
+        }
+        list.add(data);
+      }
+      return list;
+    });
+  }
+
+  /// Stream of all transactions (friend + group) for history page
+  Stream<List<Map<String, dynamic>>> getAllTransactionsStream() {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return const Stream.empty();
+
+    return _firestore
+        .collection('transactions')
+        .orderBy('time', descending: true)
+        .snapshots()
+        .asyncMap((snapshot) async {
+      List<Map<String, dynamic>> list = [];
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final from = data['from'] ?? '';
+        final toList = List<String>.from(data['toList'] ?? []);
+        final toSingle = data['to'] ?? '';
+
+        data['fromName'] = await getUserName(from);
+
+        if (toList.isNotEmpty) {
+          final names = await Future.wait(toList.map((uid) => getUserName(uid)));
+          data['toName'] = names.join(", ");
+        } else {
+          data['toName'] = await getUserName(toSingle);
+        }
+
+        data['id'] = doc.id;
+        list.add(data);
+      }
+      return list;
     });
   }
 }

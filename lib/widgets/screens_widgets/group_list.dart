@@ -76,7 +76,7 @@ class GroupListWidget extends StatelessWidget {
                   ),
                 ),
               );
-            }).toList(),
+            }),
           ],
         );
       },

@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:ledgu/controller/screens_controller/transaction_controller.dart';
 import 'package:ledgu/utilties/colors.dart';
@@ -106,7 +105,7 @@ class TransactionPage extends StatelessWidget {
                     snapshot.hasData ? snapshot.data!.join(", ") : "Loading...";
                 return TransactionTileWidget(
                   title: "Group Transaction",
-                  subtitle: "From: ${fromUid} To: $displayTo",
+                  subtitle: "From: $fromUid To: $displayTo",
                   amount: amount,
                   date: date,
                 );

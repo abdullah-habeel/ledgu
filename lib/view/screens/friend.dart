@@ -21,19 +21,8 @@ class _FriendPageState extends State<FriendPage> {
   final FriendController controller = FriendController();
   final TransactionController txController = TransactionController();
   final GroupController groupController = GroupController();
-  List<Map<String, dynamic>> friends = [];
 
-  @override
-  void initState() {
-    super.initState();
-    loadFriends();
-  }
-
-  Future<void> loadFriends() async {
-    final list = await controller.getFriends();
-    setState(() => friends = list);
-  }
-
+  // ---------------- Transaction & Group Functions ----------------
   void openTransaction(Map<String, dynamic> userOrGroup, bool isGroup) {
     Navigator.push(
       context,
@@ -52,7 +41,8 @@ class _FriendPageState extends State<FriendPage> {
       context: context,
       backgroundColor: AppColors.black2,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))
+      ),
       builder: (_) => SendMoneySheet(
         userOrGroup: userOrGroup,
         isGroup: isGroup,
@@ -61,7 +51,6 @@ class _FriendPageState extends State<FriendPage> {
     );
   }
 
-  // ---------------- Split Money for Groups ----------------
   void openSendMoneySplit(Map<String, dynamic> group) {
     showModalBottomSheet(
       context: context,
@@ -149,18 +138,24 @@ class _FriendPageState extends State<FriendPage> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            // Friends
-            FriendListWidget(
-              friends: friends,
-              onSendMoney: (f) => openSendMoney(f),
-              onViewTransaction: (f) => openTransaction(f, false),
+            // ---------------- Friends ----------------
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: controller.getFriendsStream(),
+              builder: (context, snapshot) {
+                final friends = snapshot.data ?? [];
+                return FriendListWidget(
+                  friends: friends,
+                  onSendMoney: (f) => openSendMoney(f),
+                  onViewTransaction: (f) => openTransaction(f, false),
+                );
+              },
             ),
             const SizedBox(height: 20),
 
-            // Groups
+            // ---------------- Groups ----------------
             GroupListWidget(
-              groupsStream: controller.getUserGroups(),
-              onSendMoney: (g) => openSendMoneySplit(g), // Open Split Money Sheet
+              groupsStream: groupController.getUserGroupsStream(),
+              onSendMoney: (g) => openSendMoneySplit(g),
               onViewTransaction: (g) => openTransaction(g, true),
               onEditGroup: _editGroup,
               onDeleteGroup: _deleteGroup,
