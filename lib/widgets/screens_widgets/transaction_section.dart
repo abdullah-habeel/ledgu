@@ -7,35 +7,26 @@ import 'package:ledgu/widgets/transaction_tile.dart';
 class TransactionsSection extends StatelessWidget {
   final List<Map<String, dynamic>> friends;
   final Stream<QuerySnapshot<Map<String, dynamic>>> groupsStream;
+  final bool showAll; // <-- new
 
   const TransactionsSection({
     super.key,
     required this.friends,
     required this.groupsStream,
+    this.showAll = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Limit friend transactions to 3 if showAll is false
+    final friendTx = showAll ? friends : friends.take(3).toList();
+
     return ListView(
       children: [
-        ListTile(
-          leading: MyText(
-            text: "Transactions",
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontSize: 17,
-          ),
-          trailing: MyText(
-            text: "See All",
-            fontWeight: FontWeight.bold,
-            color: AppColors.blue2,
-            fontSize: 15,
-          ),
-        ),
         Divider(color: AppColors.grey1),
 
-        /// Last 5 friend transactions
-        ...friends.take(5).map((friend) {
+        /// Last friend transactions
+        ...friendTx.map((friend) {
           return TransactionTile(
             title: friend['fullName'] ?? "User",
             subtitle: "Last Transaction",
@@ -52,8 +43,11 @@ class TransactionsSection extends StatelessWidget {
           builder: (context, snapshot) {
             if (!snapshot.hasData) return SizedBox();
 
+            final docs = snapshot.data!.docs;
+            final groupTx = showAll ? docs : docs.take(3).toList();
+
             return Column(
-              children: snapshot.data!.docs.map((doc) {
+              children: groupTx.map((doc) {
                 final data = doc.data();
                 return TransactionTile(
                   title: data['name'] ?? "Group",

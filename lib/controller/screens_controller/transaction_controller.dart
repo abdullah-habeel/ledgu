@@ -12,7 +12,7 @@ class TransactionController {
     if (uid.isEmpty) return "Unknown";
     final doc = await _firestore.collection("users").doc(uid).get();
     if (!doc.exists || doc.data() == null) return uid;
-    return (doc.data()?['fullName'] ?? uid).toString();
+    return (doc.data()?['fullName']?.toString() ?? uid);
   }
 
   /// Add transaction
@@ -30,97 +30,135 @@ class TransactionController {
       'toList': toList ?? [],
       'groupId': groupId ?? "",
       'amount': amount,
-      'time': time, // local timestamp
+      'time': time,
       'serverTime': FieldValue.serverTimestamp(),
     });
   }
 
-  /// Friend transactions
-  Stream<List<Map<String, dynamic>>> getFriendTransactions(String friendUid) {
+  /// -------------------- Friend Transactions (fixed) --------------------
+  Future<List<Map<String, dynamic>>> getFriendTransactionsPaginated({
+    required String friendUid,
+    DocumentSnapshot? startAfter,
+    int limit = 20,
+  }) async {
     final currentUser = _auth.currentUser;
-    if (currentUser == null) return const Stream.empty();
+    if (currentUser == null) return [];
 
-    return _firestore
+    Query query = _firestore
         .collection('transactions')
-        .orderBy('time', descending: true)
-        .snapshots()
-        .asyncMap((snapshot) async {
-      List<Map<String, dynamic>> list = [];
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final from = data['from'] ?? '';
-        final to = data['to'] ?? '';
-        if ((from == currentUser.uid && to == friendUid) ||
-            (from == friendUid && to == currentUser.uid)) {
-          data['id'] = doc.id;
-          data['fromName'] = await getUserName(from);
-          data['toName'] = await getUserName(to);
-          list.add(data);
-        }
-      }
-      return list;
-    });
-  }
+        .orderBy('time', descending: true);
 
-  /// Group transactions
-  Stream<List<Map<String, dynamic>>> getGroupTransactions(String groupId) {
-    return _firestore
-        .collection('transactions')
-        .where('groupId', isEqualTo: groupId)
-        .orderBy('time', descending: true)
-        .snapshots()
-        .asyncMap((snapshot) async {
-      List<Map<String, dynamic>> list = [];
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
+    if (startAfter != null) query = query.startAfterDocument(startAfter);
+
+    final snapshot = await query.limit(limit).get();
+    List<Map<String, dynamic>> list = [];
+
+    for (var doc in snapshot.docs) {
+      final data = Map<String, dynamic>.from(doc.data() as Map);
+      final from = data['from']?.toString() ?? '';
+      final to = data['to']?.toString() ?? '';
+      final toList = List<String>.from(data['toList'] ?? []);
+
+      // Include transaction if it's between current user and friend
+      if ((from == currentUser.uid && (to == friendUid || toList.contains(friendUid))) ||
+          (from == friendUid && (to == currentUser.uid || toList.contains(currentUser.uid)))) {
+
         data['id'] = doc.id;
-        final fromUid = data['from'] ?? '';
-        final toList = List<String>.from(data['toList'] ?? []);
-        data['fromName'] = await getUserName(fromUid);
-
-        if (toList.isNotEmpty) {
-          final names = await Future.wait(toList.map((uid) => getUserName(uid)));
-          data['toName'] = names.join(", ");
-        } else {
-          final toSingle = data['to'] ?? '';
-          data['toName'] = await getUserName(toSingle);
-        }
-        list.add(data);
-      }
-      return list;
-    });
-  }
-
-  /// Stream of all transactions (friend + group) for history page
-  Stream<List<Map<String, dynamic>>> getAllTransactionsStream() {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return const Stream.empty();
-
-    return _firestore
-        .collection('transactions')
-        .orderBy('time', descending: true)
-        .snapshots()
-        .asyncMap((snapshot) async {
-      List<Map<String, dynamic>> list = [];
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final from = data['from'] ?? '';
-        final toList = List<String>.from(data['toList'] ?? []);
-        final toSingle = data['to'] ?? '';
-
+        data['docSnapshot'] = doc;
         data['fromName'] = await getUserName(from);
 
         if (toList.isNotEmpty) {
           final names = await Future.wait(toList.map((uid) => getUserName(uid)));
           data['toName'] = names.join(", ");
         } else {
-          data['toName'] = await getUserName(toSingle);
+          data['toName'] = await getUserName(to);
         }
 
-        data['id'] = doc.id;
         list.add(data);
       }
-      return list;
-    });
+    }
+    return list;
+  }
+
+  /// -------------------- Group Transactions --------------------
+  Future<List<Map<String, dynamic>>> getGroupTransactionsPaginated({
+    required String groupId,
+    DocumentSnapshot? startAfter,
+    int limit = 20,
+  }) async {
+    Query query = _firestore
+        .collection('transactions')
+        .where('groupId', isEqualTo: groupId)
+        .orderBy('time', descending: true);
+
+    if (startAfter != null) query = query.startAfterDocument(startAfter);
+
+    final snapshot = await query.limit(limit).get();
+    List<Map<String, dynamic>> list = [];
+
+    for (var doc in snapshot.docs) {
+      final data = Map<String, dynamic>.from(doc.data() as Map);
+      final fromUid = data['from']?.toString() ?? '';
+      final toList = List<String>.from(data['toList'] ?? []);
+
+      data['fromName'] = await getUserName(fromUid);
+
+      if (toList.isNotEmpty) {
+        final names = await Future.wait(toList.map((uid) => getUserName(uid)));
+        data['toName'] = names.join(", ");
+      } else {
+        final toSingle = data['to']?.toString() ?? '';
+        data['toName'] = await getUserName(toSingle);
+      }
+
+      data['id'] = doc.id;
+      data['docSnapshot'] = doc;
+      list.add(data);
+    }
+    return list;
+  }
+
+  /// -------------------- All Transactions (history) --------------------
+  Future<List<Map<String, dynamic>>> getAllTransactionsPaginated({
+    DocumentSnapshot? startAfter,
+    int limit = 20,
+  }) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return [];
+
+    Query query =
+        _firestore.collection('transactions').orderBy('time', descending: true);
+
+    if (startAfter != null) query = query.startAfterDocument(startAfter);
+
+    final snapshot = await query.limit(limit).get();
+    List<Map<String, dynamic>> list = [];
+
+    for (var doc in snapshot.docs) {
+      final data = Map<String, dynamic>.from(doc.data() as Map);
+      final from = data['from']?.toString() ?? '';
+      final toSingle = data['to']?.toString() ?? '';
+      final toList = List<String>.from(data['toList'] ?? []);
+
+      data['fromName'] = await getUserName(from);
+      if (toList.isNotEmpty) {
+        final names = await Future.wait(toList.map((uid) => getUserName(uid)));
+        data['toName'] = names.join(", ");
+      } else {
+        data['toName'] = await getUserName(toSingle);
+      }
+
+      data['id'] = doc.id;
+      data['docSnapshot'] = doc;
+
+      // Include only if current user is involved
+      if (from == currentUser.uid ||
+          toSingle == currentUser.uid ||
+          toList.contains(currentUser.uid)) {
+        list.add(data);
+      }
+    }
+
+    return list;
   }
 }
